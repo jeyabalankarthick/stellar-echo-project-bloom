@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useNavigate } from 'react-router-dom';
 import { useForm, SubmitHandler } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ const Application = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [incubationCentres, setIncubationCentres] = useState<{ id: string; name: string }[]>([]);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const {
     register,
@@ -83,6 +84,8 @@ const Application = () => {
           phone: data.phone,
           company_type: data.companyType,
           team_size: data.teamSize,
+          source: 'website', // Add required source field
+          coupon_code: '', // Add required coupon_code field
           incubation_centre: data.incubationCentre,
           website: data.website,
           idea_description: data.ideaDescription,
@@ -156,7 +159,7 @@ const Application = () => {
             <p className="text-center text-gray-600">
               Your application has been submitted successfully.
             </p>
-            <Button onClick={() => router.push('/')} className="w-full">
+            <Button onClick={() => navigate('/')} className="w-full">
               Go to Home
             </Button>
           </CardContent>
