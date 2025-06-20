@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -38,6 +39,7 @@ interface IncubationCentre {
 const Admin = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [incubationCentres, setIncubationCentres] = useState<IncubationCentre[]>([]);
+  const [selectedCentre, setSelectedCentre] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [newCentre, setNewCentre] = useState({ name: '', admin_email: '' });
   const [activeTab, setActiveTab] = useState('all');
@@ -143,24 +145,47 @@ const Admin = () => {
   };
 
   const getFilteredApplications = () => {
+    let filteredApps = applications;
+    
+    // Filter by selected incubation centre
+    if (selectedCentre) {
+      filteredApps = filteredApps.filter(app => app.incubation_centre === selectedCentre);
+    }
+    
+    // Filter by status tab
     switch (activeTab) {
       case 'pending':
-        return applications.filter(app => app.status === 'pending');
+        return filteredApps.filter(app => app.status === 'pending');
       case 'approved':
-        return applications.filter(app => app.status === 'approved');
+        return filteredApps.filter(app => app.status === 'approved');
       case 'rejected':
-        return applications.filter(app => app.status === 'rejected');
+        return filteredApps.filter(app => app.status === 'rejected');
       default:
-        return applications;
+        return filteredApps;
     }
   };
 
   const getStatusCounts = () => {
+    let filteredApps = applications;
+    
+    // Filter by selected incubation centre
+    if (selectedCentre) {
+      filteredApps = filteredApps.filter(app => app.incubation_centre === selectedCentre);
+    }
+    
     return {
-      all: applications.length,
-      pending: applications.filter(app => app.status === 'pending').length,
-      approved: applications.filter(app => app.status === 'approved').length,
-      rejected: applications.filter(app => app.status === 'rejected').length,
+      all: filteredApps.length,
+      pending: filteredApps.filter(app => app.status === 'pending').length,
+      approved: filteredApps.filter(app => app.status === 'approved').length,
+      rejected: filteredApps.filter(app => app.status === 'rejected').length,
+    };
+  };
+
+  const getOverallStats = () => {
+    return {
+      totalApplicants: applications.length,
+      totalApproved: applications.filter(app => app.status === 'approved').length,
+      totalRejected: applications.filter(app => app.status === 'rejected').length,
     };
   };
 
@@ -177,13 +202,42 @@ const Admin = () => {
 
   const statusCounts = getStatusCounts();
   const filteredApplications = getFilteredApplications();
+  const overallStats = getOverallStats();
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">View startup applications and manage incubation centers</p>
+          <p className="text-gray-600">Manage incubation centers and view application statistics</p>
+        </div>
+
+        {/* Overall Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-blue-600">{overallStats.totalApplicants}</h3>
+                <p className="text-gray-600">Total Applicants</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-green-600">{overallStats.totalApproved}</h3>
+                <p className="text-gray-600">Applications Approved</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <h3 className="text-2xl font-bold text-red-600">{overallStats.totalRejected}</h3>
+                <p className="text-gray-600">Applications Rejected</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Add New Incubation Centre */}
@@ -234,11 +288,26 @@ const Admin = () => {
           </CardContent>
         </Card>
 
-        {/* Applications View Only */}
+        {/* Centre Selection and Applications */}
         <Card>
           <CardHeader>
-            <CardTitle>Applications Overview</CardTitle>
-            <p className="text-sm text-gray-600">View-only dashboard for application status monitoring</p>
+            <CardTitle>Applications by Incubation Centre</CardTitle>
+            <div className="flex gap-4 items-center">
+              <Label htmlFor="centre-select">Select Incubation Centre:</Label>
+              <Select value={selectedCentre} onValueChange={setSelectedCentre}>
+                <SelectTrigger className="w-[300px]">
+                  <SelectValue placeholder="Select incubation centre" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Centres</SelectItem>
+                  {incubationCentres.map((centre) => (
+                    <SelectItem key={centre.id} value={centre.name}>
+                      {centre.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

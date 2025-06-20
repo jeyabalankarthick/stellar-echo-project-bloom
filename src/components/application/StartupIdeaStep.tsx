@@ -127,8 +127,20 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
 
       console.log('Application saved successfully:', insertedApplication);
       
+      // Send completion email to applicant
+      console.log('Sending completion email to applicant...');
+      const { error: completionEmailError } = await supabase.functions.invoke('send-completion-email', {
+        body: { applicationId: insertedApplication.id }
+      });
+
+      if (completionEmailError) {
+        console.error('Completion email sending error:', completionEmailError);
+      } else {
+        console.log('Completion email sent successfully to applicant');
+      }
+      
       // Send email notification to admin
-      console.log('Sending email notification...');
+      console.log('Sending email notification to incubation center admin...');
       const { error: emailError } = await supabase.functions.invoke('send-approval-email', {
         body: { applicationId: insertedApplication.id }
       });
@@ -144,7 +156,7 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         console.log('Email sent successfully');
         toast({
           title: "Success",
-          description: "Application submitted successfully! Admin has been notified.",
+          description: "Application submitted successfully! You will receive a confirmation email shortly.",
         });
       }
 
