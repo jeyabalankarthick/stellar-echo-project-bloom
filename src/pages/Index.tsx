@@ -1,14 +1,23 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import LandingPage from '../components/LandingPage';
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if there's a coupon code in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const couponCode = urlParams.get('code');
+    
+    if (couponCode) {
+      // Redirect to register page with coupon code
+      navigate(`/register?code=${couponCode}`);
+    }
+  }, [navigate]);
+
+  return <LandingPage />;
 };
 
 export default Index;
