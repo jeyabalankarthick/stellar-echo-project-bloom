@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,9 +104,14 @@ const Admin = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('incubation_centres')
-        .insert([newCentre]);
+        .insert([{
+          name: newCentre.name,
+          admin_email: newCentre.admin_email
+        }])
+        .select()
+        .single();
 
       if (error) {
         console.error('Error adding incubation centre:', error);
@@ -119,6 +123,8 @@ const Admin = () => {
         return;
       }
 
+      console.log('Incubation centre added:', data);
+
       toast({
         title: "Success",
         description: "Incubation centre added successfully",
@@ -128,6 +134,11 @@ const Admin = () => {
       fetchIncubationCentres();
     } catch (error) {
       console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
     }
   };
 
