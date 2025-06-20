@@ -30,12 +30,14 @@ const Application = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [incubationCentres, setIncubationCentres] = useState<{ id: string; name: string }[]>([]);
+  const [selectedIncubationCentre, setSelectedIncubationCentre] = useState('');
   const navigate = useNavigate();
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<ApplicationData>();
 
   useEffect(() => {
@@ -70,6 +72,11 @@ const Application = () => {
     fetchIncubationCentres();
   }, []);
 
+  const handleIncubationCentreChange = (value: string) => {
+    setSelectedIncubationCentre(value);
+    setValue('incubationCentre', value);
+  };
+
   const submitApplication = async (data: ApplicationData) => {
     try {
       setIsSubmitting(true);
@@ -84,8 +91,8 @@ const Application = () => {
           phone: data.phone,
           company_type: data.companyType,
           team_size: data.teamSize,
-          source: 'website', // Add required source field
-          coupon_code: '', // Add required coupon_code field
+          source: 'website',
+          coupon_code: '',
           incubation_centre: data.incubationCentre,
           website: data.website,
           idea_description: data.ideaDescription,
@@ -253,7 +260,6 @@ const Application = () => {
                   placeholder="Enter team size"
                   {...register("teamSize", {
                     required: 'Team size is required',
-                    valueAsNumber: true,
                     min: {
                       value: 1,
                       message: "Team size must be at least 1",
@@ -267,7 +273,7 @@ const Application = () => {
               </div>
               <div>
                 <Label htmlFor="incubationCentre">Incubation Centre</Label>
-                <Select>
+                <Select value={selectedIncubationCentre} onValueChange={handleIncubationCentreChange}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select an incubation centre" />
                   </SelectTrigger>
@@ -280,7 +286,6 @@ const Application = () => {
                   </SelectContent>
                 </Select>
                 <Input
-                  id="incubationCentre"
                   type="hidden"
                   {...register("incubationCentre", { required: 'Incubation Centre is required' })}
                 />
