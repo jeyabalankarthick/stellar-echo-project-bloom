@@ -39,7 +39,7 @@ interface IncubationCentre {
 const Admin = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [incubationCentres, setIncubationCentres] = useState<IncubationCentre[]>([]);
-  const [selectedCentre, setSelectedCentre] = useState<string>('');
+  const [selectedCentre, setSelectedCentre] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [newCentre, setNewCentre] = useState({ name: '', admin_email: '' });
   const [activeTab, setActiveTab] = useState('all');
@@ -148,7 +148,7 @@ const Admin = () => {
     let filteredApps = applications;
     
     // Filter by selected incubation centre
-    if (selectedCentre) {
+    if (selectedCentre && selectedCentre !== 'all') {
       filteredApps = filteredApps.filter(app => app.incubation_centre === selectedCentre);
     }
     
@@ -169,7 +169,7 @@ const Admin = () => {
     let filteredApps = applications;
     
     // Filter by selected incubation centre
-    if (selectedCentre) {
+    if (selectedCentre && selectedCentre !== 'all') {
       filteredApps = filteredApps.filter(app => app.incubation_centre === selectedCentre);
     }
     
@@ -299,7 +299,7 @@ const Admin = () => {
                   <SelectValue placeholder="Select incubation centre" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Centres</SelectItem>
+                  <SelectItem value="all">All Centres</SelectItem>
                   {incubationCentres.map((centre) => (
                     <SelectItem key={centre.id} value={centre.name}>
                       {centre.name}
