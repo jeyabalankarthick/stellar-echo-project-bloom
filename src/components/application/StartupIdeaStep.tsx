@@ -127,46 +127,62 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
 
       console.log('Application saved successfully:', insertedApplication);
       
-      // Send submission confirmation email to applicant
-      console.log('Sending submission confirmation email...');
+      // DIRECT EMAIL SENDING - Send confirmation email to the registered user
+      const userEmail = data.email;
+      console.log(`DIRECT EMAIL: Sending confirmation to registered user email: ${userEmail}`);
+      
       try {
-        const { error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
-          body: { 
-            applicationId: insertedApplication.id,
-            email: data.email,
-            founderName: data.founderName,
-            startupName: data.startupName
-          }
+        const confirmationEmailPayload = {
+          applicationId: insertedApplication.id,
+          email: userEmail,
+          founderName: data.founderName,
+          startupName: data.startupName
+        };
+        
+        console.log('DIRECT EMAIL: Confirmation email payload:', confirmationEmailPayload);
+        
+        const { data: emailResponse, error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
+          body: confirmationEmailPayload
         });
 
         if (confirmationEmailError) {
-          console.error('Confirmation email error:', confirmationEmailError);
+          console.error('DIRECT EMAIL: Confirmation email error:', confirmationEmailError);
+          toast({
+            title: "Email Warning",
+            description: `Application saved but confirmation email failed to send to ${userEmail}`,
+            variant: "destructive",
+          });
         } else {
-          console.log('Submission confirmation email sent successfully');
+          console.log('DIRECT EMAIL: Confirmation email sent successfully to:', userEmail);
+          console.log('DIRECT EMAIL: Email response:', emailResponse);
+          toast({
+            title: "Success",
+            description: `Application submitted successfully! Confirmation email sent to ${userEmail}`,
+          });
         }
       } catch (emailError) {
-        console.error('Error sending confirmation email:', emailError);
+        console.error('DIRECT EMAIL: Error sending confirmation email to user:', emailError);
+        toast({
+          title: "Email Warning", 
+          description: `Application saved but confirmation email failed to send to ${userEmail}`,
+          variant: "destructive",
+        });
       }
       
       // Send email notification to admin
       console.log('Sending admin notification email...');
-      const { error: emailError } = await supabase.functions.invoke('send-approval-email', {
-        body: { applicationId: insertedApplication.id }
-      });
+      try {
+        const { error: adminEmailError } = await supabase.functions.invoke('send-approval-email', {
+          body: { applicationId: insertedApplication.id }
+        });
 
-      if (emailError) {
-        console.error('Email sending error:', emailError);
-        // Don't fail the submission if email fails, but notify user
-        toast({
-          title: "Application Submitted",
-          description: "Application saved successfully, but admin notification failed. Admin will be notified manually.",
-        });
-      } else {
-        console.log('Admin notification email sent successfully');
-        toast({
-          title: "Success",
-          description: "Application submitted successfully! You will receive a confirmation email shortly.",
-        });
+        if (adminEmailError) {
+          console.error('Admin email sending error:', adminEmailError);
+        } else {
+          console.log('Admin notification email sent successfully');
+        }
+      } catch (adminEmailError) {
+        console.error('Error sending admin notification:', adminEmailError);
       }
 
       setApplicationId(insertedApplication.id);
