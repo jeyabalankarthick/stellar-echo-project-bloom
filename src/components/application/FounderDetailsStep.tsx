@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,11 +76,12 @@ const FounderDetailsStep = ({ data, updateData, onNext }: FounderDetailsStepProp
                 id="email"
                 type="email"
                 value={data.email || ''}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                className="border-gray-300"
-                placeholder="Enter your email"
+                readOnly
+                className="border-gray-300 bg-gray-50 cursor-not-allowed"
+                placeholder="Email will be auto-filled from login"
                 required
               />
+              <p className="text-xs text-gray-500">This email is automatically filled from your login and cannot be changed</p>
             </div>
 
             <div className="space-y-2">

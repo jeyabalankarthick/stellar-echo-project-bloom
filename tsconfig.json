@@ -1,23 +1,11 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ],
-  "compilerOptions": {
-    "lib": ["deno.ns", "dom", "es2020"],
-    "strict": true,
-    "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": {
-      "@/": ["./src/"]
+    {
+      "path": "./tsconfig.app.json"
     },
-    "include": ["/*.ts"],
-    "noImplicitAny": false,
-    "noUnusedParameters": false,
-    "skipLibCheck": true,
-    "allowJs": true,
-    "noUnusedLocals": false,
-    "strictNullChecks": false
-  }
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }
