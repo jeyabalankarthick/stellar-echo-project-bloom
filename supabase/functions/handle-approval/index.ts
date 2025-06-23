@@ -1,348 +1,131 @@
 /// <reference lib="deno.ns" />
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
-const handler = async (req: Request): Promise<Response> => {
+const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY= Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const RESEND_API_KEY           = Deno.env.get("RESEND_API_KEY")!;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const resend   = new Resend(RESEND_API_KEY);
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req: Request): Promise<Response> => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
+    // 1. Get & validate token
     const url = new URL(req.url);
-    const token = url.searchParams.get('token');
+    const token = url.searchParams.get("token");
+    if (!token)
+      return new Response("Missing token", { status: 400, headers: corsHeaders });
 
-    console.log('Processing approval token:', token);
-
-    if (!token) {
-      return new Response('Invalid token', { status: 400 });
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Get approval token details
-    const { data: approvalToken, error: tokenError } = await supabaseClient
-      .from('approval_tokens')
-      .select('*')
-      .eq('token', token)
-      .eq('used', false)
+    const { data: tokenRecord, error: tokErr } = await supabase
+      .from("approval_tokens")
+      .select("application_id, action, expires_at, used")
+      .eq("token", token)
       .single();
 
-    if (tokenError || !approvalToken) {
-      console.error('Token not found or already used:', tokenError);
-      return new Response(`
-        <html>
-          <head>
-            <title>Invalid Link - Dreamers Incubation</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                margin: 0; 
-                padding: 40px 20px; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .container { 
-                max-width: 500px; 
-                background: white; 
-                padding: 40px; 
-                border-radius: 20px; 
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                text-align: center;
-              }
-              .error { color: #ef4444; }
-              .icon { font-size: 48px; margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="icon">❌</div>
-              <h1 class="error">Invalid or Expired Link</h1>
-              <p>This approval link is invalid or has already been used.</p>
-              <p>If you need to review an application, please check your email for a valid link.</p>
-            </div>
-          </body>
-        </html>
-      `, {
-        status: 400,
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
+    if (tokErr || !tokenRecord)
+      return new Response("Invalid or expired link", { status: 400, headers: corsHeaders });
 
-    // Check if token is expired
-    if (new Date(approvalToken.expires_at) < new Date()) {
-      console.log('Token expired:', approvalToken.expires_at);
-      return new Response(`
-        <html>
-          <head>
-            <title>Link Expired - Dreamers Incubation</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                margin: 0; 
-                padding: 40px 20px; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .container { 
-                max-width: 500px; 
-                background: white; 
-                padding: 40px; 
-                border-radius: 20px; 
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                text-align: center;
-              }
-              .warning { color: #f59e0b; }
-              .icon { font-size: 48px; margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="icon">⏰</div>
-              <h1 class="warning">Link Expired</h1>
-              <p>This approval link has expired (valid for 7 days).</p>
-              <p>Please contact the system administrator if you need to review this application.</p>
-            </div>
-          </body>
-        </html>
-      `, {
-        status: 400,
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
+    if (tokenRecord.used)
+      return new Response("This link has already been used.", { status: 400, headers: corsHeaders });
 
-    // Get application details for better messaging
-    const { data: application, error: appError } = await supabaseClient
-      .from('applications')
-      .select('founder_name, startup_name, incubation_centre')
-      .eq('id', approvalToken.application_id)
+    if (new Date(tokenRecord.expires_at) < new Date())
+      return new Response("This link has expired.",    { status: 400, headers: corsHeaders });
+
+    // 2. Fetch the application
+    const { data: application, error: appErr } = await supabase
+      .from("applications")
+      .select("*")
+      .eq("id", tokenRecord.application_id)
       .single();
 
-    // Update application status
-    const newStatus = approvalToken.action === 'approve' ? 'approved' : 'rejected';
-    const timestampField = approvalToken.action === 'approve' ? 'approved_at' : 'rejected_at';
+    if (appErr || !application)
+      return new Response("Application not found", { status: 404, headers: corsHeaders });
 
-    console.log('Updating application status to:', newStatus);
+    // 3. Update status
+    const isApproved = tokenRecord.action === "approve";
+    const newStatus  = isApproved ? "approved" : "rejected";
+    await supabase
+      .from("applications")
+      .update({ status: newStatus })
+      .eq("id", application.id);
 
-    const { error: updateError } = await supabaseClient
-      .from('applications')
-      .update({ 
-        status: newStatus,
-        [timestampField]: new Date().toISOString()
-      })
-      .eq('id', approvalToken.application_id);
-
-    if (updateError) {
-      console.error('Error updating application:', updateError);
-      return new Response(`
-        <html>
-          <head>
-            <title>Error - Dreamers Incubation</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-              body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                margin: 0; 
-                padding: 40px 20px; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .container { 
-                max-width: 500px; 
-                background: white; 
-                padding: 40px; 
-                border-radius: 20px; 
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                text-align: center;
-              }
-              .error { color: #ef4444; }
-              .icon { font-size: 48px; margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="icon">❌</div>
-              <h1 class="error">Error Processing Request</h1>
-              <p>There was an error processing your approval. Please try again or contact support.</p>
-            </div>
-          </body>
-        </html>
-      `, { 
-        status: 500,
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
-
-    // Mark token as used
-    await supabaseClient
-      .from('approval_tokens')
+    // 4. Mark token used
+    await supabase
+      .from("approval_tokens")
       .update({ used: true })
       .eq("token", token);
 
-    // Send notification email to applicant
-    try {
-      await supabaseClient.functions.invoke('send-status-notification', {
-        body: { 
-          applicationId: approvalToken.application_id, 
-          status: newStatus 
+    // 5. Send email to the applicant
+    const statusText = isApproved ? "Approved" : "Rejected";
+    const subject    = Your Dreamers application has been ${statusText}!;
+    const emailHtml  = `
+      <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:20px">
+        <h2>Hi ${application.founder_name},</h2>
+        <p>Your application to <strong>${application.incubation_centre}</strong> has been <strong>${statusText}</strong>.</p>
+        ${
+          isApproved
+            ? <p>🎉 Congratulations! We look forward to supporting your startup.</p>
+            : <p>😔 We’re sorry—your application was not approved at this time.</p>
         }
-      });
-    } catch (notificationError) {
-      console.error('Error sending notification:', notificationError);
+        <p>Thank you for applying to Dreamers Incubation.</p>
+      </body></html>
+    `;
+
+    const { data: emailData, error: emailErr } = await resend.emails.send({
+      from:    "Dreamers Incubation <noreply@dreamersincubation.com>",
+      to:      [application.email],
+      subject,
+      html:    emailHtml,
+    });
+
+    if (emailErr) {
+      console.error("❌ Error sending applicant email:", emailErr);
+    } else {
+      console.log("✅ Applicant notification sent, message ID:", emailData.id);
     }
 
-    console.log('Application', newStatus, 'successfully');
-
-    const actionText = approvalToken.action === 'approve' ? 'approved' : 'rejected';
-    const actionColor = approvalToken.action === 'approve' ? '#10b981' : '#ef4444';
-    const actionIcon = approvalToken.action === 'approve' ? '🎉' : '😔';
-
-    return new Response(`
-      <html>
-        <head>
-          <title>Application ${actionText.toUpperCase()} - Dreamers Incubation</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              margin: 0; 
-              padding: 40px 20px; 
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .container { 
-              max-width: 600px; 
-              background: white; 
-              padding: 40px; 
-              border-radius: 20px; 
-              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-              text-align: center;
-            }
-            .success { color: ${actionColor}; }
-            .icon { font-size: 64px; margin-bottom: 20px; }
-            .details { 
-              background: #f8fafc; 
-              padding: 25px; 
-              border-radius: 12px; 
-              margin: 25px 0; 
-              text-align: left;
-            }
-            .detail-row {
-              display: flex;
-              justify-content: space-between;
-              padding: 10px 0;
-              border-bottom: 1px solid #e2e8f0;
-            }
-            .detail-row:last-child {
-              border-bottom: none;
-            }
-            .status-badge {
-              display: inline-block;
-              background: ${actionColor};
-              color: white;
-              padding: 8px 20px;
-              border-radius: 25px;
-              font-weight: 600;
-              font-size: 14px;
-              margin: 20px 0;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="icon">${actionIcon}</div>
-            <h1 class="success">Application ${actionText.toUpperCase()}!</h1>
-            <div class="status-badge">${actionText.toUpperCase()}</div>
-            
-            ${application ? `
-            <div class="details">
-              <div class="detail-row">
-                <strong>Startup:</strong>
-                <span>${application.startup_name}</span>
-              </div>
-              <div class="detail-row">
-                <strong>Founder:</strong>
-                <span>${application.founder_name}</span>
-              </div>
-              <div class="detail-row">
-                <strong>Incubation Centre:</strong>
-                <span>${application.incubation_centre}</span>
-              </div>
-            </div>
-            ` : ''}
-            
-            <p><strong>The application has been successfully ${actionText}.</strong></p>
-            <p>✅ The applicant has been notified automatically via email.</p>
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-              <p style="color: #64748b; font-size: 14px;">
-                Thank you for reviewing this application for ${application?.incubation_centre || 'your incubation center'}.
-              </p>
-            </div>
-          </div>
-        </body>
+    // 6. Return the same confirmation HTML page
+    const pageHtml = `
+      <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+        <title>Application ${statusText}</title>
+        <style>
+          body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                 margin:0;padding:40px 20px;
+                 background:linear-gradient(135deg,#667eea,#764ba2);
+                 min-height:100vh;display:flex;align-items:center;justify-content:center; }
+          .container { background:#fff;padding:40px;border-radius:20px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.1);}
+          .icon { font-size:64px;margin-bottom:20px;}
+          .status-badge { display:inline-block;padding:8px 20px;border-radius:25px;
+                           background:${ isApproved ? '#10B981' : '#EF4444' };
+                           color:white;font-weight:600;margin:20px 0;}
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="icon">${ isApproved ? "🎉" : "😔" }</div>
+          <h1>Application ${statusText}!</h1>
+          <div class="status-badge">${statusText.toUpperCase()}</div>
+          <p>The applicant has been notified via email.</p>
+        </div>
+      </body>
       </html>
-    `, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
-    });
+    `;
 
-  } catch (error: any) {
-    console.error("Error in handle-approval function:", error);
-    return new Response(`
-      <html>
-        <head>
-          <title>Error - Dreamers Incubation</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body { 
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-              margin: 0; 
-              padding: 40px 20px; 
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .container { 
-              max-width: 500px; 
-              background: white; 
-              padding: 40px; 
-              border-radius: 20px; 
-              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-              text-align: center;
-            }
-            .error { color: #ef4444; }
-            .icon { font-size: 48px; margin-bottom: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="icon">❌</div>
-            <h1 class="error">Internal Server Error</h1>
-            <p>An unexpected error occurred. Please try again later or contact support.</p>
-          </div>
-        </body>
-      </html>
-    `, { 
-      status: 500,
-      headers: { 'Content-Type': 'text/html' },
-    });
-  }
-};
-
-serve(handler);
+    return new Response(pageHtml, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html" } });
+  } catch (err) {
+    console.error("❌ handle-approval error:", err);
+    return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
+  }
+});

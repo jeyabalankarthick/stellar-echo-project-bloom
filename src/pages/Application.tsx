@@ -1,370 +1,226 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useForm, SubmitHandler } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-
-interface ApplicationData {
-  founderName: string;
-  startupName: string;
-  email: string;
-  phone: string;
-  companyType: string;
-  teamSize: string;
-  incubationCentre: string;
-  website?: string;
-  ideaDescription: string;
-  expectations: string[];
-  challenges?: string;
-}
+import { toast } from "@/hooks/use-toast";
+import FounderDetailsStep from '../components/application/FounderDetailsStep';
+import IncubationInfoStep from '../components/application/IncubationInfoStep';
+import StartupIdeaStep from '../components/application/StartupIdeaStep';
+import ApplicationSuccess from '../components/application/ApplicationSuccess';
+import CongratulationsModal from '../components/CongratulationsModal';
 
 const Application = () => {
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [incubationCentres, setIncubationCentres] = useState<{ id: string; name: string }[]>([]);
-  const [selectedIncubationCentre, setSelectedIncubationCentre] = useState('');
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [userApplication, setUserApplication] = useState(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showCongratulationsModal, setShowCongratulationsModal] = useState(false);
+  const [applicationData, setApplicationData] = useState({
+    // Step 1: Founder Details
+    founderName: '',
+    startupName: '',
+    email: '',
+    phone: '',
+    companyType: '',
+    teamSize: '',
+    source: '',
+    couponCode: '',
+    
+    // Step 2: Incubation Info
+    incubationCentre: '',
+    registrationCertificate: null,
+    incubationLetter: null,
+    website: '',
+    
+    // Step 3: Startup Idea
+    ideaDescription: '',
+    expectations: [],
+    challenges: ''
+  });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    setValue,
-  } = useForm<ApplicationData>();
+  const steps = [
+    { number: 1, title: 'Founder Details', description: 'Basic information about you and your startup' },
+    { number: 2, title: 'Incubation Info', description: 'Documents and incubation center details' },
+    { number: 3, title: 'Startup Idea', description: 'Your vision and expectations' }
+  ];
 
   useEffect(() => {
-    // Fetch incubation centres on component mount
-    const fetchIncubationCentres = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('incubation_centres')
-          .select('id, name');
-
-        if (error) {
-          console.error('Error fetching incubation centres:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load incubation centres.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        setIncubationCentres(data || []);
-      } catch (error) {
-        console.error('Error fetching incubation centres:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load incubation centres.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchIncubationCentres();
+    checkUserApplication();
   }, []);
 
-  const handleIncubationCentreChange = (value: string) => {
-    setSelectedIncubationCentre(value);
-    setValue('incubationCentre', value);
-  };
-
-  const submitApplication = async (data: ApplicationData) => {
+  const checkUserApplication = async () => {
     try {
-      setIsSubmitting(true);
+      const { data: { user } } = await supabase.auth.getUser();
       
-      // Insert the application
-      const { data: applicationData, error } = await supabase
-        .from('applications')
-        .insert([{
-          founder_name: data.founderName,
-          startup_name: data.startupName,
-          email: data.email,
-          phone: data.phone,
-          company_type: data.companyType,
-          team_size: data.teamSize,
-          source: 'website',
-          coupon_code: '',
-          incubation_centre: data.incubationCentre,
-          website: data.website,
-          idea_description: data.ideaDescription,
-          expectations: data.expectations,
-          challenges: data.challenges,
-          status: 'pending'
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error submitting application:', error);
-        toast({
-          title: "Error",
-          description: "Failed to submit application. Please try again.",
-          variant: "destructive",
-        });
+      if (!user) {
+        setLoading(false);
         return;
       }
 
-      console.log('Application submitted successfully:', applicationData);
+      // Check if user has an existing application
+      const { data: applications, error } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('email', user.email)
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      // Send completion email to user
-      try {
-        const { error: completionEmailError } = await supabase.functions.invoke('send-completion-email', {
-          body: { applicationId: applicationData.id }
+      if (error) {
+        console.error('Error checking user application:', error);
+        toast({
+          title: "Error",
+          description: "Failed to check application status",
+          variant: "destructive",
         });
-
-        if (completionEmailError) {
-          console.error('Error sending completion email:', completionEmailError);
-        }
-      } catch (emailError) {
-        console.error('Error with completion email function:', emailError);
+        setLoading(false);
+        return;
       }
 
-      // Send approval email to incubation center admin
-      try {
-        const { error: approvalEmailError } = await supabase.functions.invoke('send-approval-email', {
-          body: { applicationId: applicationData.id }
-        });
-
-        if (approvalEmailError) {
-          console.error('Error sending approval email:', approvalEmailError);
+      if (applications && applications.length > 0) {
+        const application = applications[0];
+        setUserApplication(application);
+        
+        // Show congratulations modal for newly approved applications
+        if (application.status === 'approved') {
+          // Check if we should show the modal (first time seeing approval)
+          const hasSeenCongratulations = localStorage.getItem(`congratulations_${application.id}`);
+          if (!hasSeenCongratulations) {
+            setShowCongratulationsModal(true);
+            localStorage.setItem(`congratulations_${application.id}`, 'true');
+          }
         }
-      } catch (emailError) {
-        console.error('Error with approval email function:', emailError);
       }
-
-      setShowSuccess(true);
-      setIsSubmitting(false);
       
+      setLoading(false);
     } catch (error) {
-      console.error('Unexpected error:', error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
-      setIsSubmitting(false);
+      console.error('Error:', error);
+      setLoading(false);
     }
   };
 
-  if (showSuccess) {
+  const progress = (currentStep / steps.length) * 100;
+
+  const updateApplicationData = (data: any) => {
+    setApplicationData(prev => ({ ...prev, ...data }));
+  };
+
+  const nextStep = () => {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const renderCurrentStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <FounderDetailsStep
+            data={applicationData}
+            updateData={updateApplicationData}
+            onNext={nextStep}
+          />
+        );
+      case 2:
+        return (
+          <IncubationInfoStep
+            data={applicationData}
+            updateData={updateApplicationData}
+            onNext={nextStep}
+            onPrev={prevStep}
+          />
+        );
+      case 3:
+        return (
+          <StartupIdeaStep
+            data={applicationData}
+            updateData={updateApplicationData}
+            onPrev={prevStep}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md w-full p-8">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Application Submitted!</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <p className="text-center text-gray-600">
-              Your application has been submitted successfully.
-            </p>
-            <Button onClick={() => navigate('/')} className="w-full">
-              Go to Home
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking application status...</p>
+        </div>
       </div>
     );
   }
 
+  // If user has an existing application, show the success component
+  if (userApplication) {
+    return (
+      <>
+        <ApplicationSuccess applicationId={userApplication.id} />
+        <CongratulationsModal 
+          isOpen={showCongratulationsModal}
+          onClose={() => setShowCongratulationsModal(false)}
+          applicationData={userApplication}
+        />
+      </>
+    );
+  }
+
+  // If no application exists, show the application form
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Startup Incubation Application</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(submitApplication)} className="grid gap-4">
-              <div>
-                <Label htmlFor="founderName">Founder Name</Label>
-                <Input
-                  id="founderName"
-                  placeholder="Enter your name"
-                  {...register("founderName", { required: 'Founder name is required' })}
-                  aria-invalid={errors.founderName ? "true" : "false"}
-                />
-                {errors.founderName && (
-                  <p className="text-red-500 text-sm">{errors.founderName.message}</p>
-                )}
+      <div className="container mx-auto px-4 max-w-4xl">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Startup Application</h1>
+          <p className="text-gray-600">Complete your application for the Dreamers Incubation Program</p>
+        </div>
+
+        {/* Progress Bar */}
+        <Card className="mb-8 border-gray-200">
+          <CardContent className="pt-6">
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <span>Step {currentStep} of {steps.length}</span>
+                <span>{Math.round(progress)}% Complete</span>
               </div>
-              <div>
-                <Label htmlFor="startupName">Startup Name</Label>
-                <Input
-                  id="startupName"
-                  placeholder="Enter startup name"
-                  {...register("startupName", { required: 'Startup name is required' })}
-                  aria-invalid={errors.startupName ? "true" : "false"}
-                />
-                {errors.startupName && (
-                  <p className="text-red-500 text-sm">{errors.startupName.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  {...register("email", {
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: "Invalid email address",
-                    },
-                  })}
-                  aria-invalid={errors.email ? "true" : "false"}
-                />
-                {errors.email && (
-                  <p className="text-red-500 text-sm">{errors.email.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="Enter your phone number"
-                  {...register("phone", { required: 'Phone number is required' })}
-                  aria-invalid={errors.phone ? "true" : "false"}
-                />
-                {errors.phone && (
-                  <p className="text-red-500 text-sm">{errors.phone.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="companyType">Company Type</Label>
-                <Input
-                  id="companyType"
-                  placeholder="Enter company type"
-                  {...register("companyType", { required: 'Company type is required' })}
-                  aria-invalid={errors.companyType ? "true" : "false"}
-                />
-                {errors.companyType && (
-                  <p className="text-red-500 text-sm">{errors.companyType.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="teamSize">Team Size</Label>
-                <Input
-                  id="teamSize"
-                  type="number"
-                  placeholder="Enter team size"
-                  {...register("teamSize", {
-                    required: 'Team size is required',
-                    min: {
-                      value: 1,
-                      message: "Team size must be at least 1",
-                    },
-                  })}
-                  aria-invalid={errors.teamSize ? "true" : "false"}
-                />
-                {errors.teamSize && (
-                  <p className="text-red-500 text-sm">{errors.teamSize.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="incubationCentre">Incubation Centre</Label>
-                <Select value={selectedIncubationCentre} onValueChange={handleIncubationCentreChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select an incubation centre" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {incubationCentres.map((centre) => (
-                      <SelectItem key={centre.id} value={centre.name}>
-                        {centre.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="hidden"
-                  {...register("incubationCentre", { required: 'Incubation Centre is required' })}
-                />
-                {errors.incubationCentre && (
-                  <p className="text-red-500 text-sm">{errors.incubationCentre.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="website">Website (Optional)</Label>
-                <Input
-                  id="website"
-                  type="url"
-                  placeholder="Enter website URL"
-                  {...register("website")}
-                  aria-invalid={errors.website ? "true" : "false"}
-                />
-                {errors.website && (
-                  <p className="text-red-500 text-sm">{errors.website.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="ideaDescription">Idea Description</Label>
-                <Textarea
-                  id="ideaDescription"
-                  placeholder="Describe your startup idea"
-                  {...register("ideaDescription", { required: 'Idea description is required' })}
-                  aria-invalid={errors.ideaDescription ? "true" : "false"}
-                />
-                {errors.ideaDescription && (
-                  <p className="text-red-500 text-sm">{errors.ideaDescription.message}</p>
-                )}
-              </div>
-              <div>
-                <Label>Expectations from Incubation</Label>
-                <div className="flex flex-col gap-2">
-                  <div>
-                    <Label htmlFor="expectation1" className="inline-flex items-center space-x-2">
-                      <Checkbox id="expectation1" value="Funding" {...register("expectations")} />
-                      <span>Funding</span>
-                    </Label>
+              <Progress value={progress} className="h-2" />
+            </div>
+            
+            {/* Step Indicators */}
+            <div className="flex justify-between">
+              {steps.map((step) => (
+                <div key={step.number} className="flex-1 text-center">
+                  <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium mb-2 ${
+                    step.number <= currentStep 
+                      ? 'bg-gray-900 text-white' 
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {step.number}
                   </div>
-                  <div>
-                    <Label htmlFor="expectation2" className="inline-flex items-center space-x-2">
-                      <Checkbox id="expectation2" value="Mentorship" {...register("expectations")} />
-                      <span>Mentorship</span>
-                    </Label>
-                  </div>
-                  <div>
-                    <Label htmlFor="expectation3" className="inline-flex items-center space-x-2">
-                      <Checkbox id="expectation3" value="Networking" {...register("expectations")} />
-                      <span>Networking</span>
-                    </Label>
-                  </div>
-                  <div>
-                    <Label htmlFor="expectation4" className="inline-flex items-center space-x-2">
-                      <Checkbox id="expectation4" value="Resources" {...register("expectations")} />
-                      <span>Resources</span>
-                    </Label>
+                  <div className="text-xs">
+                    <div className={`font-medium ${step.number <= currentStep ? 'text-gray-900' : 'text-gray-500'}`}>
+                      {step.title}
+                    </div>
+                    <div className="text-gray-400 hidden sm:block">
+                      {step.description}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div>
-                <Label htmlFor="challenges">Challenges (Optional)</Label>
-                <Textarea
-                  id="challenges"
-                  placeholder="Describe any challenges you're facing"
-                  {...register("challenges")}
-                  aria-invalid={errors.challenges ? "true" : "false"}
-                />
-                {errors.challenges && (
-                  <p className="text-red-500 text-sm">{errors.challenges.message}</p>
-                )}
-              </div>
-              <Button disabled={isSubmitting} type="submit">
-                {isSubmitting ? "Submitting..." : "Submit Application"}
-              </Button>
-            </form>
+              ))}
+            </div>
           </CardContent>
         </Card>
+
+        {/* Current Step Content */}
+        {renderCurrentStep()}
       </div>
     </div>
   );
