@@ -68,10 +68,13 @@ serve(async (req: Request): Promise<Response> => {
       .update({ used: true })
       .eq("token", token);
 
-    // 5. Send email to the applicant
+    // 5. Send email to the registered user email address
     const statusText = isApproved ? "Approved" : "Rejected";
-    const subject    = `Your Dreamers application has been ${statusText}!`;
-    const emailHtml  = `
+    const registeredEmail = application.email;
+    console.log(`APPROVAL/REJECTION EMAIL: Sending ${statusText} notification to registered email: ${registeredEmail}`);
+    
+    const subject = `🎉 Your Dreamers application has been ${statusText}!`;
+    const emailHtml = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -197,6 +200,10 @@ serve(async (req: Request): Promise<Response> => {
                     <span class="detail-value">${application.incubation_centre}</span>
                   </div>
                   <div class="detail-item">
+                    <span class="detail-label">Registered Email:</span>
+                    <span class="detail-value">${registeredEmail}</span>
+                  </div>
+                  <div class="detail-item">
                     <span class="detail-label">Applied On:</span>
                     <span class="detail-value">${new Date(application.created_at).toLocaleDateString()}</span>
                   </div>
@@ -204,8 +211,8 @@ serve(async (req: Request): Promise<Response> => {
                 <div class="message">
                   ${
                     isApproved
-                      ? `<p><strong>Congratulations!</strong> Your application has been approved by ${application.incubation_centre}. You now have access to all the benefits of the incubation program.</p>`
-                      : `<p>We're sorry to inform you that your application was not approved at this time. Please feel free to reach out for feedback or consider reapplying in the future.</p>`
+                      ? `<p><strong>🎉 Congratulations!</strong> Your application has been approved by ${application.incubation_centre}. You now have access to all the benefits of the incubation program. This notification was sent to your registered email address: <strong>${registeredEmail}</strong></p>`
+                      : `<p><strong>😔 We're sorry to inform you that your application was not approved at this time.</strong> Please feel free to reach out for feedback or consider reapplying in the future. This notification was sent to your registered email address: <strong>${registeredEmail}</strong></p>`
                   }
                 </div>
                 ${
@@ -226,15 +233,15 @@ serve(async (req: Request): Promise<Response> => {
 
     const { data: emailData, error: emailErr } = await resend.emails.send({
       from:    "Dreamers Incubation <noreply@dreamersincubation.com>",
-      to:      [application.email],
+      to:      [registeredEmail],
       subject,
       html:    emailHtml,
     });
 
     if (emailErr) {
-      console.error("❌ Error sending applicant email:", emailErr);
+      console.error("❌ APPROVAL/REJECTION EMAIL: Error sending email to registered user:", emailErr);
     } else {
-      console.log("✅ Applicant notification sent, message ID:", emailData.id);
+      console.log("✅ APPROVAL/REJECTION EMAIL: Notification sent successfully to registered email:", registeredEmail, "Message ID:", emailData.id);
     }
 
     // 6. Return the same confirmation HTML page
@@ -258,7 +265,7 @@ serve(async (req: Request): Promise<Response> => {
           <div class="icon">${ isApproved ? "🎉" : "😔" }</div>
           <h1>Application ${statusText}!</h1>
           <div class="status-badge">${statusText.toUpperCase()}</div>
-          <p>The applicant has been notified via email.</p>
+          <p>The applicant has been notified via email at: <strong>${registeredEmail}</strong></p>
         </div>
       </body>
       </html>

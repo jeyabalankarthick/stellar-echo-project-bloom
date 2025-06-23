@@ -32,7 +32,7 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const { applicationId, email, founderName, startupName }: ConfirmationEmailRequest = await req.json();
 
-    console.log(`Sending submission confirmation to ${email} for application ${applicationId}`);
+    console.log(`DIRECT EMAIL: Sending submission confirmation to registered user email: ${email} for application ${applicationId}`);
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -40,7 +40,7 @@ serve(async (req: Request): Promise<Response> => {
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Application Submitted Successfully</title>
+          <title>Your Application Submitted Successfully</title>
           <style>
             body { 
               margin: 0; 
@@ -130,8 +130,8 @@ serve(async (req: Request): Promise<Response> => {
           <div class="container">
             <div class="card">
               <div class="header">
-                <span class="icon">🎉</span>
-                <h1>Application Submitted Successfully!</h1>
+                <span class="icon">📧</span>
+                <h1>Your Application Submitted Successfully!</h1>
               </div>
               <div class="content">
                 <div class="status-badge">SUBMITTED</div>
@@ -149,13 +149,17 @@ serve(async (req: Request): Promise<Response> => {
                     <span class="detail-value">${applicationId}</span>
                   </div>
                   <div class="detail-item">
+                    <span class="detail-label">Registered Email:</span>
+                    <span class="detail-value">${email}</span>
+                  </div>
+                  <div class="detail-item">
                     <span class="detail-label">Submitted On:</span>
                     <span class="detail-value">${new Date().toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div class="message">
-                  <p><strong>Thank you for your application!</strong> We have successfully received your application for the Dreamers Incubation Program.</p>
-                  <p>Our team will review your application and the incubation center will be notified. You will receive another email once a decision has been made regarding your application status.</p>
+                  <p><strong>Thank you for your application!</strong> We have successfully received your application for the Dreamers Incubation Program at your registered email address: <strong>${email}</strong></p>
+                  <p>Our team will review your application and the incubation center will be notified. You will receive another email at this same registered address once a decision has been made regarding your application status.</p>
                   <p>If you have any questions, please don't hesitate to contact our support team.</p>
                 </div>
               </div>
@@ -172,27 +176,27 @@ serve(async (req: Request): Promise<Response> => {
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: "Dreamers Incubation <noreply@dreamersincubation.com>",
       to: [email],
-      subject: "🎉 Application Submitted Successfully - Dreamers Incubation",
+      subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
       html: emailHtml,
     });
 
     if (emailError) {
-      console.error("Resend error:", emailError);
+      console.error("DIRECT EMAIL: Resend error:", emailError);
       return new Response(
-        JSON.stringify({ error: "Failed to send confirmation email" }),
+        JSON.stringify({ error: "Failed to send confirmation email to registered address" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Confirmation email sent successfully, message ID:", emailData.id);
+    console.log("DIRECT EMAIL: Confirmation email sent successfully to registered user:", email, "Message ID:", emailData.id);
 
     return new Response(
-      JSON.stringify({ success: true, message: `Confirmation email sent to ${email}` }),
+      JSON.stringify({ success: true, message: `Confirmation email sent to registered address: ${email}` }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err) {
-    console.error("Error in send-submission-confirmation function:", err);
+    console.error("DIRECT EMAIL: Error in send-submission-confirmation function:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
