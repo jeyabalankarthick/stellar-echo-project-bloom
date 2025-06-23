@@ -1,216 +1,147 @@
+/// <reference lib="deno.ns" />
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Resend } from "npm:resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Resend }        from "https://esm.sh/resend@2.0.0";
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const SUPABASE_URL              = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const RESEND_API_KEY            = Deno.env.get("RESEND_API_KEY")!;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const resend   = new Resend(RESEND_API_KEY);
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Origin":   "*",
+  "Access-Control-Allow-Headers":  "authorization, x-client-info, apikey, content-type",
 };
 
-interface EmailRequest {
-  applicationId: string;
-}
-
-const handler = async (req: Request): Promise<Response> => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const { applicationId }: EmailRequest = await req.json();
-
-    console.log('Processing approval email for application:', applicationId);
-
-    // Get application details
-    const { data: application, error: appError } = await supabaseClient
-      .from('applications')
-      .select('*')
-      .eq('id', applicationId)
-      .single();
-
-    if (appError || !application) {
-      console.error('Application not found:', appError);
-      return new Response(JSON.stringify({ error: 'Application not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // 1) Extract the token from the query string
+    const url   = new URL(req.url);
+    const token = url.searchParams.get("token");
+    if (!token) {
+      return new Response("Missing token", { status: 400, headers: corsHeaders });
     }
 
-    console.log('Application found:', application.startup_name, 'for centre:', application.incubation_centre);
-
-    // Get incubation center admin email based on the selected centre
-    const { data: incubationCenter, error: centerError } = await supabaseClient
-      .from('incubation_centres')
-      .select('admin_email, name')
-      .eq('name', application.incubation_centre)
+    // 2) Look up & validate the token
+    const { data: tok, error: tokErr } = await supabase
+      .from("approval_tokens")
+      .select("application_id, action, expires_at, used")
+      .eq("token", token)
       .single();
 
-    if (centerError || !incubationCenter) {
-      console.error('Incubation center not found:', centerError);
-      console.error('Looking for centre:', application.incubation_centre);
-      return new Response(JSON.stringify({ error: 'Incubation center not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (tokErr || !tok) {
+      return new Response("Invalid or expired link", { status: 400, headers: corsHeaders });
+    }
+    if (tok.used) {
+      return new Response("This link has already been used.", { status: 400, headers: corsHeaders });
+    }
+    if (new Date(tok.expires_at) < new Date()) {
+      return new Response("This link has expired.", { status: 400, headers: corsHeaders });
     }
 
-    console.log('Sending email to incubation center admin:', incubationCenter.admin_email);
+    // 3) Fetch the application row
+    const { data: app, error: appErr } = await supabase
+      .from("applications")
+      .select("startup_name, founder_name, incubation_centre, email, created_at")
+      .eq("id", tok.application_id)
+      .single();
 
-    // Create approval tokens with expiration date (7 days from now)
-    const approveToken = crypto.randomUUID();
-    const rejectToken = crypto.randomUUID();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // Expire in 7 days
+    if (appErr || !app) {
+      return new Response("Application not found", { status: 404, headers: corsHeaders });
+    }
 
-    const { error: tokenError } = await supabaseClient
-      .from('approval_tokens')
-      .insert([
-        { 
-          application_id: applicationId, 
-          token: approveToken, 
-          action: 'approve',
-          expires_at: expiresAt.toISOString()
-        },
-        { 
-          application_id: applicationId, 
-          token: rejectToken, 
-          action: 'reject',
-          expires_at: expiresAt.toISOString()
+    // 4) Update its status
+    const isApproved = tok.action === "approve";
+    const newStatus  = isApproved ? "approved" : "rejected";
+    await supabase
+      .from("applications")
+      .update({ status: newStatus })
+      .eq("id", tok.application_id);
+
+    // 5) Mark the token used
+    await supabase
+      .from("approval_tokens")
+      .update({ used: true })
+      .eq("token", token);
+
+    // 6) *Send the email to the USER* at app.email
+    const statusText = isApproved ? "Approved" : "Rejected";
+    const subject    = Your Dreamers application has been ${statusText}!;
+    const emailHtml  = `
+      <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:20px">
+        <h2>Hi ${app.founder_name},</h2>
+        <p>Your application to <strong>${app.incubation_centre}</strong> has been <strong>${statusText}</strong>.</p>
+        ${
+          isApproved
+            ? <p>🎉 Congratulations! We look forward to supporting your startup.</p>
+            : <p>😔 We’re sorry—your application was not approved at this time.</p>
         }
-      ]);
+        <p>Thank you for applying to Dreamers Incubation.</p>
+      </body></html>
+    `;
 
-    if (tokenError) {
-      console.error('Error creating tokens:', tokenError);
-      return new Response(JSON.stringify({ error: 'Failed to create approval tokens' }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { error: emailErr } = await resend.emails.send({
+      from:    "Dreamers Incubation <noreply@dreamersincubation.com>",
+      to:      [app.email],
+      subject,
+      html:    emailHtml,
+    });
+
+    if (emailErr) {
+      console.error("❌ Failed to send applicant email:", emailErr);
+    } else {
+      console.log("✅ Applicant notified, message sent to:", app.email);
     }
 
-    console.log('Approval tokens created successfully');
-
-    // Send email to incubation center admin (not generic admin)
-    const approveUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/handle-approval?token=${approveToken}`;
-    const rejectUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/handle-approval?token=${rejectToken}`;
-
-    const emailResponse = await resend.emails.send({
-      from: "Dreamers Incubation <noreply@resend.dev>",
-      to: [incubationCenter.admin_email],
-      subject: `New Application for ${incubationCenter.name}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="color: #333; margin: 0 0 10px 0;">New Startup Application Received</h2>
-            <p style="margin: 0; color: #666;">A new startup has applied to join ${incubationCenter.name}</p>
-          </div>
-          
-          <div style="background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #333; margin-top: 0;">Application Details:</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Founder Name:</td>
-                <td style="padding: 8px 0; color: #333;">${application.founder_name}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Startup Name:</td>
-                <td style="padding: 8px 0; color: #333;">${application.startup_name}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Email:</td>
-                <td style="padding: 8px 0; color: #333;">${application.email}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Phone:</td>
-                <td style="padding: 8px 0; color: #333;">${application.phone}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Company Type:</td>
-                <td style="padding: 8px 0; color: #333;">${application.company_type}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Team Size:</td>
-                <td style="padding: 8px 0; color: #333;">${application.team_size}</td>
-              </tr>
-              ${application.website ? `
-              <tr>
-                <td style="padding: 8px 0; font-weight: bold; color: #555;">Website:</td>
-                <td style="padding: 8px 0; color: #333;"><a href="${application.website}" target="_blank">${application.website}</a></td>
-              </tr>
-              ` : ''}
-            </table>
-          </div>
-
-          <div style="background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #333; margin-top: 0;">Startup Idea:</h3>
-            <p style="color: #333; line-height: 1.6; margin: 0;">${application.idea_description}</p>
-          </div>
-
-          ${application.expectations && application.expectations.length > 0 ? `
-          <div style="background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="color: #333; margin-top: 0;">Expectations from Incubation:</h3>
-            <ul style="color: #333; margin: 0; padding-left: 20px;">
-              ${application.expectations.map(exp => `<li style="margin-bottom: 5px;">${exp}</li>`).join('')}
-            </ul>
-          </div>
-          ` : ''}
-
-          ${application.challenges ? `
-          <div style="background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-            <h3 style="color: #333; margin-top: 0;">Current Challenges:</h3>
-            <p style="color: #333; line-height: 1.6; margin: 0;">${application.challenges}</p>
-          </div>
-          ` : ''}
-
-          <div style="text-align: center; margin: 30px 0;">
-            <p style="color: #333; margin-bottom: 20px; font-weight: bold;">Please review this application and make your decision:</p>
-            <div style="margin: 20px 0;">
-              <a href="${approveUrl}" 
-                 style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 0 10px; display: inline-block; font-weight: bold;">
-                ✅ APPROVE APPLICATION
-              </a>
-              <a href="${rejectUrl}" 
-                 style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 0 10px; display: inline-block; font-weight: bold;">
-                ❌ REJECT APPLICATION
-              </a>
-            </div>
-          </div>
-
-          <div style="border-top: 1px solid #e9ecef; padding-top: 20px; text-align: center;">
-            <p style="color: #666; font-size: 12px; margin: 0;">
-              <strong>Important:</strong> These approval links will expire in 7 days.<br>
-              This email was sent to you as the admin of ${incubationCenter.name}.
-            </p>
-          </div>
+    // 7) Return the HTML confirmation for the admin
+    const pageHtml = `
+      <!DOCTYPE html><html><head>
+        <meta charset="utf-8"><meta name="viewport" content="width=device-width">
+        <title>Application ${statusText}</title>
+        <style>
+          body {
+            margin:0;padding:40px 20px;
+            background:linear-gradient(135deg,#667eea,#764ba2);
+            font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+            display:flex;align-items:center;justify-content:center;
+            min-height:100vh;
+          }
+          .box {
+            background:#fff;padding:40px;border-radius:20px;
+            box-shadow:0 20px 40px rgba(0,0,0,0.1);
+            text-align:center;
+          }
+          .icon { font-size:64px;margin-bottom:20px;}
+          .badge {
+            display:inline-block;padding:8px 20px;border-radius:25px;
+            background:${ isApproved ? "#10B981" : "#EF4444" };color:#fff;
+            font-weight:600;margin:20px 0;
+          }
+        </style>
+      </head><body>
+        <div class="box">
+          <div class="icon">${ isApproved ? "🎉" : "😔" }</div>
+          <h1>Application ${statusText}!</h1>
+          <div class="badge">${statusText.toUpperCase()}</div>
+          <p>The applicant at <strong>${app.email}</strong> has been notified.</p>
         </div>
-      `,
-    });
+      </body></html>
+    `;
 
-    console.log("Email sent successfully to:", incubationCenter.admin_email, emailResponse);
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: `Email sent to ${incubationCenter.name} admin`,
-      adminEmail: incubationCenter.admin_email
-    }), {
+    return new Response(pageHtml, {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "text/html" },
     });
 
-  } catch (error: any) {
-    console.error("Error in send-approval-email function:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-};
-
-serve(handler);
+  } catch (err) {
+    console.error("handle-approval error:", err);
+    return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
+  }
+});

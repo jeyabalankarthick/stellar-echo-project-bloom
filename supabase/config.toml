@@ -22,7 +22,7 @@ enable_manual_linking = false
 verify_jwt = false
 
 [functions.send-approval-email]
-verify_jwt = true
+verify_jwt = false
 
 [functions.send-status-notification]
 verify_jwt = false

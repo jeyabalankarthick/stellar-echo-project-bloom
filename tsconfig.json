@@ -5,10 +5,14 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
+    "lib": ["deno.ns", "dom", "es2020"],
+    "strict": true,
+    "moduleResolution": "node",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/": ["./src/"]
     },
+    "include": ["/*.ts"],
     "noImplicitAny": false,
     "noUnusedParameters": false,
     "skipLibCheck": true,
