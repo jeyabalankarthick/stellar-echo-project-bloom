@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +14,7 @@ const Application = () => {
   const [userApplication, setUserApplication] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [showCongratulationsModal, setShowCongratulationsModal] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState(null);
   const [applicationData, setApplicationData] = useState({
     // Step 1: Founder Details
     founderName: '',
@@ -56,6 +56,13 @@ const Application = () => {
         setLoading(false);
         return;
       }
+
+      // Set the logged-in user and auto-populate email
+      setLoggedInUser(user);
+      setApplicationData(prev => ({
+        ...prev,
+        email: user.email
+      }));
 
       // Check if user has an existing application
       const { data: applications, error } = await supabase

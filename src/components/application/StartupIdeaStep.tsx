@@ -127,8 +127,29 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
 
       console.log('Application saved successfully:', insertedApplication);
       
+      // Send submission confirmation email to applicant
+      console.log('Sending submission confirmation email...');
+      try {
+        const { error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
+          body: { 
+            applicationId: insertedApplication.id,
+            email: data.email,
+            founderName: data.founderName,
+            startupName: data.startupName
+          }
+        });
+
+        if (confirmationEmailError) {
+          console.error('Confirmation email error:', confirmationEmailError);
+        } else {
+          console.log('Submission confirmation email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+      }
+      
       // Send email notification to admin
-      console.log('Sending email notification...');
+      console.log('Sending admin notification email...');
       const { error: emailError } = await supabase.functions.invoke('send-approval-email', {
         body: { applicationId: insertedApplication.id }
       });
@@ -138,13 +159,13 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         // Don't fail the submission if email fails, but notify user
         toast({
           title: "Application Submitted",
-          description: "Application saved successfully, but email notification failed. Admin will be notified manually.",
+          description: "Application saved successfully, but admin notification failed. Admin will be notified manually.",
         });
       } else {
-        console.log('Email sent successfully');
+        console.log('Admin notification email sent successfully');
         toast({
           title: "Success",
-          description: "Application submitted successfully! Admin has been notified.",
+          description: "Application submitted successfully! You will receive a confirmation email shortly.",
         });
       }
 

@@ -1,3 +1,4 @@
+
 /// <reference lib="deno.ns" />
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -69,18 +70,158 @@ serve(async (req: Request): Promise<Response> => {
 
     // 5. Send email to the applicant
     const statusText = isApproved ? "Approved" : "Rejected";
-    const subject    = Your Dreamers application has been ${statusText}!;
+    const subject    = `Your Dreamers application has been ${statusText}!`;
     const emailHtml  = `
-      <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:20px">
-        <h2>Hi ${application.founder_name},</h2>
-        <p>Your application to <strong>${application.incubation_centre}</strong> has been <strong>${statusText}</strong>.</p>
-        ${
-          isApproved
-            ? <p>🎉 Congratulations! We look forward to supporting your startup.</p>
-            : <p>😔 We’re sorry—your application was not approved at this time.</p>
-        }
-        <p>Thank you for applying to Dreamers Incubation.</p>
-      </body></html>
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Application ${statusText} - Dreamers Incubation</title>
+          <style>
+            body { 
+              margin: 0; 
+              padding: 0; 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+              min-height: 100vh; 
+            }
+            .container { 
+              max-width: 600px; 
+              margin: 0 auto; 
+              padding: 40px 20px; 
+            }
+            .card { 
+              background: #fff; 
+              border-radius: 20px; 
+              box-shadow: 0 20px 40px rgba(0,0,0,0.1); 
+              overflow: hidden; 
+            }
+            .header { 
+              background: ${isApproved ? '#10B981' : '#EF4444'}; 
+              color: white; 
+              padding: 40px 30px; 
+              text-align: center; 
+            }
+            .header .icon { 
+              font-size: 48px; 
+              margin-bottom: 20px; 
+              display: block; 
+            }
+            .header h1 { 
+              margin: 0; 
+              font-size: 28px; 
+              font-weight: 700; 
+            }
+            .content { 
+              padding: 40px 30px; 
+            }
+            .status-badge { 
+              display: inline-block; 
+              background: ${isApproved ? '#10B981' : '#EF4444'}; 
+              color: white; 
+              padding: 8px 20px; 
+              border-radius: 25px; 
+              font-weight: 600; 
+              font-size: 14px; 
+              margin-bottom: 20px; 
+            }
+            .details { 
+              background: #f8fafc; 
+              border-radius: 12px; 
+              padding: 25px; 
+              margin: 20px 0; 
+            }
+            .detail-item { 
+              display: flex; 
+              justify-content: space-between; 
+              padding: 8px 0; 
+              border-bottom: 1px solid #e2e8f0; 
+            }
+            .detail-item:last-child { 
+              border-bottom: none; 
+            }
+            .detail-label { 
+              font-weight: 600; 
+              color: #475569; 
+            }
+            .detail-value { 
+              color: #1e293b; 
+              text-align: right; 
+            }
+            .message { 
+              line-height: 1.6; 
+              color: #475569; 
+              margin: 20px 0; 
+            }
+            .cta-button { 
+              display: inline-block; 
+              background: ${isApproved ? '#10B981' : '#EF4444'}; 
+              color: white; 
+              padding: 15px 30px; 
+              border-radius: 8px; 
+              text-decoration: none; 
+              font-weight: 600; 
+              margin: 20px 0; 
+              transition: all .3s ease; 
+            }
+            .footer { 
+              text-align: center; 
+              padding: 20px; 
+              color: #64748b; 
+              font-size: 14px; 
+              border-top: 1px solid #e2e8f0; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="card">
+              <div class="header">
+                <span class="icon">${isApproved ? "🎉" : "😔"}</span>
+                <h1>Application ${statusText}!</h1>
+              </div>
+              <div class="content">
+                <div class="status-badge">${statusText.toUpperCase()}</div>
+                <div class="details">
+                  <div class="detail-item">
+                    <span class="detail-label">Startup Name:</span>
+                    <span class="detail-value">${application.startup_name}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Founder:</span>
+                    <span class="detail-value">${application.founder_name}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Incubation Centre:</span>
+                    <span class="detail-value">${application.incubation_centre}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Applied On:</span>
+                    <span class="detail-value">${new Date(application.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div class="message">
+                  ${
+                    isApproved
+                      ? `<p><strong>Congratulations!</strong> Your application has been approved by ${application.incubation_centre}. You now have access to all the benefits of the incubation program.</p>`
+                      : `<p>We're sorry to inform you that your application was not approved at this time. Please feel free to reach out for feedback or consider reapplying in the future.</p>`
+                  }
+                </div>
+                ${
+                  isApproved
+                    ? `<a href="${SUPABASE_URL.replace("/functions/v1", "")}/login" class="cta-button">Access Your Benefits →</a>`
+                    : `<a href="mailto:support@dreamersincubation.com" class="cta-button">Contact Support</a>`
+                }
+              </div>
+              <div class="footer">
+                <p>© 2025 Dreamers Incubation. All rights reserved.</p>
+                <p>Email: support@dreamersincubation.com</p>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
     `;
 
     const { data: emailData, error: emailErr } = await resend.emails.send({
@@ -126,6 +267,6 @@ serve(async (req: Request): Promise<Response> => {
     return new Response(pageHtml, { status: 200, headers: { ...corsHeaders, "Content-Type": "text/html" } });
   } catch (err) {
     console.error("❌ handle-approval error:", err);
-    return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
-  }
+    return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
+  }
 });
