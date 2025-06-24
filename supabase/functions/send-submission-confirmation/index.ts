@@ -30,27 +30,38 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    console.log("SUBMISSION EMAIL: Function called");
+    console.log("🚀 CONFIRMATION EMAIL: Function started");
 
+    // Check if Resend API key exists
     if (!RESEND_API_KEY) {
-      console.error("SUBMISSION EMAIL: RESEND_API_KEY is not set");
+      console.error("❌ CONFIRMATION EMAIL: RESEND_API_KEY is missing");
       return new Response(
-        JSON.stringify({ error: "Email service not configured" }),
+        JSON.stringify({ error: "Email service not configured - missing API key" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { applicationId, email, founderName, startupName }: ConfirmationEmailRequest = await req.json();
+    console.log("✅ CONFIRMATION EMAIL: RESEND_API_KEY found");
 
-    console.log(`SUBMISSION EMAIL: Processing request for ${email}, Application ID: ${applicationId}`);
+    const requestBody = await req.json();
+    console.log("📧 CONFIRMATION EMAIL: Request body:", requestBody);
+
+    const { applicationId, email, founderName, startupName }: ConfirmationEmailRequest = requestBody;
 
     if (!applicationId || !email || !founderName || !startupName) {
-      console.error("SUBMISSION EMAIL: Missing required fields");
+      console.error("❌ CONFIRMATION EMAIL: Missing required fields:", {
+        applicationId: !!applicationId,
+        email: !!email,
+        founderName: !!founderName,
+        startupName: !!startupName
+      });
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log(`📨 CONFIRMATION EMAIL: Preparing to send to ${email}`);
 
     const emailHtml = `
     <!DOCTYPE html>
@@ -58,48 +69,34 @@ serve(async (req: Request): Promise<Response> => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Application Submitted Successfully - Dreamers Incubation</title>
+        <title>Application Submitted Successfully</title>
       </head>
-      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-          <div style="background: #fff; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden;">
-            <div style="background: #10B981; color: white; padding: 40px 30px; text-align: center;">
-              <div style="font-size: 48px; margin-bottom: 20px;">📧</div>
-              <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Your Application Submitted Successfully!</h1>
+      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f3f4f6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: white; border-radius: 8px; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #10B981; font-size: 28px; margin: 0;">🎉 Application Submitted!</h1>
             </div>
-            <div style="padding: 40px 30px;">
-              <div style="display: inline-block; background: #10B981; color: white; padding: 8px 20px; border-radius: 25px; font-weight: 600; font-size: 14px; margin-bottom: 20px;">SUBMITTED</div>
-              <div style="background: #f8fafc; border-radius: 12px; padding: 25px; margin: 20px 0;">
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                  <span style="font-weight: 600; color: #475569;">Startup Name:</span>
-                  <span style="color: #1e293b;">${startupName}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                  <span style="font-weight: 600; color: #475569;">Founder:</span>
-                  <span style="color: #1e293b;">${founderName}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                  <span style="font-weight: 600; color: #475569;">Application ID:</span>
-                  <span style="color: #1e293b;">${applicationId}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
-                  <span style="font-weight: 600; color: #475569;">Email:</span>
-                  <span style="color: #1e293b;">${email}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                  <span style="font-weight: 600; color: #475569;">Submitted On:</span>
-                  <span style="color: #1e293b;">${new Date().toLocaleDateString()}</span>
-                </div>
-              </div>
-              <div style="line-height: 1.6; color: #475569; margin: 20px 0;">
-                <p><strong>Thank you for your application!</strong> We have successfully received your application for the Dreamers Incubation Program.</p>
-                <p>Our team will review your application and you will receive another email once a decision has been made regarding your application status.</p>
-                <p>If you have any questions, please don't hesitate to contact our support team.</p>
-              </div>
+            
+            <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h3 style="color: #374151; margin-top: 0;">Application Details:</h3>
+              <p><strong>Startup Name:</strong> ${startupName}</p>
+              <p><strong>Founder:</strong> ${founderName}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Application ID:</strong> ${applicationId}</p>
+              <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
             </div>
-            <div style="text-align: center; padding: 20px; color: #64748b; font-size: 14px; border-top: 1px solid #e2e8f0;">
-              <p>© 2025 Dreamers Incubation. All rights reserved.</p>
-              <p>Email: support@dreamersincubation.com</p>
+            
+            <div style="color: #6b7280; line-height: 1.6;">
+              <p>Dear ${founderName},</p>
+              <p>Thank you for submitting your application to the Dreamers Incubation Program!</p>
+              <p>We have successfully received your application for <strong>${startupName}</strong>. Our team will review your submission and notify you once a decision has been made.</p>
+              <p>If you have any questions, please don't hesitate to contact our support team.</p>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 14px;">
+              <p>© 2025 Dreamers Incubation Program</p>
+              <p>This is an automated email. Please do not reply.</p>
             </div>
           </div>
         </div>
@@ -107,40 +104,48 @@ serve(async (req: Request): Promise<Response> => {
     </html>
     `;
 
-    console.log("SUBMISSION EMAIL: Sending email via Resend");
+    console.log("📤 CONFIRMATION EMAIL: Attempting to send via Resend");
 
-    const { data: emailData, error: emailError } = await resend.emails.send({
+    const emailResult = await resend.emails.send({
       from: "Dreamers Incubation <noreply@resend.dev>",
       to: [email],
-      subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
+      subject: "🎉 Application Submitted Successfully - Dreamers Incubation",
       html: emailHtml,
     });
 
-    if (emailError) {
-      console.error("SUBMISSION EMAIL: Resend error:", emailError);
+    console.log("📧 CONFIRMATION EMAIL: Resend response:", emailResult);
+
+    if (emailResult.error) {
+      console.error("❌ CONFIRMATION EMAIL: Resend error:", emailResult.error);
       return new Response(
-        JSON.stringify({ error: "Failed to send confirmation email", details: emailError }),
+        JSON.stringify({ 
+          error: "Failed to send confirmation email", 
+          details: emailResult.error,
+          resendError: true 
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("SUBMISSION EMAIL: Email sent successfully to:", email, "Message ID:", emailData?.id);
+    console.log(`✅ CONFIRMATION EMAIL: Successfully sent to ${email}, Message ID: ${emailResult.data?.id}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Confirmation email sent successfully to ${email}`,
-        messageId: emailData?.id 
+        messageId: emailResult.data?.id,
+        email: email
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (err) {
-    console.error("SUBMISSION EMAIL: Unexpected error:", err);
+  } catch (error) {
+    console.error("💥 CONFIRMATION EMAIL: Unexpected error:", error);
     return new Response(
       JSON.stringify({ 
         error: "Internal server error", 
-        message: err instanceof Error ? err.message : "Unknown error" 
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

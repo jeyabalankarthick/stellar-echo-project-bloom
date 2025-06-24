@@ -43,7 +43,8 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('Starting application submission with data:', data);
+    console.log('🚀 SUBMISSION: Starting application submission');
+    console.log('📋 SUBMISSION: Application data:', data);
     
     if (!data.ideaDescription?.trim()) {
       toast({
@@ -64,20 +65,26 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
     }
 
     // Validate required fields from previous steps
-    if (!data.founderName || !data.startupName || !data.email || !data.phone || !data.companyType || !data.teamSize || !data.source || !data.incubationCentre) {
-      console.error('Missing required fields:', {
-        founderName: data.founderName,
-        startupName: data.startupName,
-        email: data.email,
-        phone: data.phone,
-        companyType: data.companyType,
-        teamSize: data.teamSize,
-        source: data.source,
-        incubationCentre: data.incubationCentre
-      });
+    const requiredFields = {
+      founderName: data.founderName,
+      startupName: data.startupName,
+      email: data.email,
+      phone: data.phone,
+      companyType: data.companyType,
+      teamSize: data.teamSize,
+      source: data.source,
+      incubationCentre: data.incubationCentre
+    };
+
+    const missingFields = Object.entries(requiredFields)
+      .filter(([_, value]) => !value)
+      .map(([key, _]) => key);
+
+    if (missingFields.length > 0) {
+      console.error('❌ SUBMISSION: Missing required fields:', missingFields);
       toast({
         title: "Error",
-        description: "Please complete all required fields in previous steps",
+        description: `Please complete all required fields: ${missingFields.join(', ')}`,
         variant: "destructive",
       });
       return;
@@ -86,7 +93,7 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
     setSubmitting(true);
 
     try {
-      console.log('Inserting application data...');
+      console.log('💾 SUBMISSION: Inserting application into database');
       
       const applicationData = {
         founder_name: data.founderName,
@@ -107,7 +114,7 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         status: 'pending'
       };
 
-      console.log('Application data to insert:', applicationData);
+      console.log('📤 SUBMISSION: Database payload:', applicationData);
 
       const { data: insertedApplication, error: insertError } = await supabase
         .from('applications')
@@ -116,7 +123,7 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         .single();
 
       if (insertError) {
-        console.error('Database insertion error:', insertError);
+        console.error('❌ SUBMISSION: Database error:', insertError);
         toast({
           title: "Database Error",
           description: `Failed to save application: ${insertError.message}`,
@@ -125,70 +132,67 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         return;
       }
 
-      console.log('Application saved successfully:', insertedApplication);
+      console.log('✅ SUBMISSION: Application saved with ID:', insertedApplication.id);
       
-      // Send confirmation email to the registered user
-      const userEmail = data.email;
-      console.log(`SUBMISSION: Attempting to send confirmation email to: ${userEmail}`);
+      // Send confirmation email to user
+      console.log('📧 SUBMISSION: Sending confirmation email to user');
       
       try {
-        const confirmationEmailPayload = {
+        const confirmationPayload = {
           applicationId: insertedApplication.id,
-          email: userEmail,
+          email: data.email,
           founderName: data.founderName,
           startupName: data.startupName
         };
         
-        console.log('Confirmation email payload:', confirmationEmailPayload);
+        console.log('📤 SUBMISSION: Confirmation email payload:', confirmationPayload);
         
-        const response = await supabase.functions.invoke('send-submission-confirmation', {
-          body: confirmationEmailPayload
+        const confirmationResponse = await supabase.functions.invoke('send-submission-confirmation', {
+          body: confirmationPayload
         });
 
-        console.log('Email function response:', response);
+        console.log('📧 SUBMISSION: Confirmation email response:', confirmationResponse);
 
-        if (response.error) {
-          console.error('Confirmation email error:', response.error);
-          toast({
-            title: "Application Submitted",
-            description: `Your application has been submitted successfully! However, we couldn't send the confirmation email to ${userEmail}. Please contact support if needed.`,
-          });
+        if (confirmationResponse.error) {
+          console.error('❌ SUBMISSION: Confirmation email failed:', confirmationResponse.error);
+          console.log('⚠️ SUBMISSION: Application saved but email failed - showing partial success message');
         } else {
-          console.log('Confirmation email sent successfully to:', userEmail);
-          toast({
-            title: "Success!",
-            description: `Application submitted successfully! A confirmation email has been sent to ${userEmail}`,
-          });
+          console.log('✅ SUBMISSION: Confirmation email sent successfully');
         }
       } catch (emailError) {
-        console.error('Error sending confirmation email:', emailError);
-        toast({
-          title: "Application Submitted", 
-          description: `Your application has been submitted successfully! However, we couldn't send the confirmation email to ${userEmail}. Please contact support if needed.`,
-        });
+        console.error('💥 SUBMISSION: Confirmation email exception:', emailError);
       }
       
-      // Send email notification to admin
-      console.log('Sending admin notification email...');
+      // Send admin notification email
+      console.log('👤 SUBMISSION: Sending admin notification email');
+      
       try {
         const adminResponse = await supabase.functions.invoke('send-approval-email', {
           body: { applicationId: insertedApplication.id }
         });
 
+        console.log('👤 SUBMISSION: Admin email response:', adminResponse);
+
         if (adminResponse.error) {
-          console.error('Admin email error:', adminResponse.error);
+          console.error('❌ SUBMISSION: Admin email failed:', adminResponse.error);
         } else {
-          console.log('Admin notification email sent successfully');
+          console.log('✅ SUBMISSION: Admin notification sent successfully');
         }
       } catch (adminEmailError) {
-        console.error('Error sending admin notification:', adminEmailError);
+        console.error('💥 SUBMISSION: Admin email exception:', adminEmailError);
       }
+
+      // Show success regardless of email status
+      toast({
+        title: "Success!",
+        description: "Your application has been submitted successfully!",
+      });
 
       setApplicationId(insertedApplication.id);
       setSubmitted(true);
 
     } catch (error) {
-      console.error('Unexpected error during submission:', error);
+      console.error('💥 SUBMISSION: Unexpected error:', error);
       toast({
         title: "Submission Error",
         description: `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`,
