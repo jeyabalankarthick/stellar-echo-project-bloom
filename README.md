@@ -71,3 +71,38 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## Application Email Confirmation Flow
+
+When a user submits their application, a confirmation email is sent to the email address they registered and logged in with. This is implemented as follows:
+
+- **User logs in with their email**
+- **Email gets auto-filled in the application form (non-editable)**
+- **When the application is submitted, a confirmation email is sent to that same registered email address**
+
+### Technical Details
+- In the application form, the email field is automatically populated from the user's login session and is read-only.
+- On submission, the confirmation email is sent to this email address using the `send-submission-confirmation` function.
+- The relevant code can be found in `src/components/application/StartupIdeaStep.tsx`:
+
+```ts
+// This sends the confirmation email to the registered user's email
+const { error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
+  body: { 
+    applicationId: insertedApplication.id,
+    email: data.email, // This is the user's registered email
+    founderName: data.founderName,
+    startupName: data.startupName
+  }
+});
+```
+- The email address (`data.email`) is auto-filled from the logged-in user's session in `src/pages/Application.tsx`:
+
+```ts
+setApplicationData(prev => ({
+  ...prev,
+  email: user.email // Auto-filled from user's login session
+}));
+```
+
+This ensures that the confirmation email is always sent to the email address the user registered and logged in with, as required.
