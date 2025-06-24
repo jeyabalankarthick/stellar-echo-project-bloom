@@ -1,3 +1,4 @@
+
 /// <reference lib="deno.ns" />
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -31,14 +32,15 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const { applicationId, email, founderName, startupName }: ConfirmationEmailRequest = await req.json();
 
-    console.log(`DIRECT EMAIL: Sending submission confirmation to registered user email: ${email} for application ${applicationId}`);
+    console.log(`SUBMISSION EMAIL: Sending confirmation to registered user: ${email} for application ${applicationId}`);
+
     const emailHtml = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Your Application Submitted Successfully</title>
+        <title>Application Submitted Successfully - Dreamers Incubation</title>
         <style>
           body { 
             margin: 0; 
@@ -157,7 +159,7 @@ serve(async (req: Request): Promise<Response> => {
               </div>
               <div class="message">
                 <p><strong>Thank you for your application!</strong> We have successfully received your application for the Dreamers Incubation Program at your registered email address: <strong>${email}</strong></p>
-                <p>Our team will review your application and the incubation center will be notified. You will receive another email at this same registered address once a decision has been made regarding your application status.</p>
+                <p>Our team will review your application and you will receive another email at this same registered address once a decision has been made regarding your application status.</p>
                 <p>If you have any questions, please don't hesitate to contact our support team.</p>
               </div>
             </div>
@@ -169,38 +171,32 @@ serve(async (req: Request): Promise<Response> => {
         </div>
       </body>
     </html>
-  `;
+    `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: "Dreamers Incubation <onboarding@resend.dev>", // ✅ TEST MODE FROM ADDRESS
+      from: "Dreamers Incubation <onboarding@resend.dev>",
       to: [email],
-      subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
       subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
       html: emailHtml,
     });
 
     if (emailError) {
-      console.error("DIRECT EMAIL: Resend error:", emailError);
-      console.error("DIRECT EMAIL: Resend error:", emailError);
+      console.error("SUBMISSION EMAIL: Resend error:", emailError);
       return new Response(
-        JSON.stringify({ error: "Failed to send confirmation email to registered address" }),
         JSON.stringify({ error: "Failed to send confirmation email to registered address" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("DIRECT EMAIL: Confirmation email sent successfully to registered user:", email, "Message ID:", emailData.id);
-    console.log("DIRECT EMAIL: Confirmation email sent successfully to registered user:", email, "Message ID:", emailData.id);
+    console.log("SUBMISSION EMAIL: Confirmation email sent successfully to:", email, "Message ID:", emailData.id);
 
     return new Response(
-      JSON.stringify({ success: true, message: `Confirmation email sent to registered address: ${email}` }),
       JSON.stringify({ success: true, message: `Confirmation email sent to registered address: ${email}` }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err) {
-    console.error("DIRECT EMAIL: Error in send-submission-confirmation function:", err);
-    console.error("DIRECT EMAIL: Error in send-submission-confirmation function:", err);
+    console.error("SUBMISSION EMAIL: Error in send-submission-confirmation function:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
