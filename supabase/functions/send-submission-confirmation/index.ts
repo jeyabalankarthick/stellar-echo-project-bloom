@@ -175,25 +175,31 @@ serve(async (req: Request): Promise<Response> => {
       from: "Dreamers Incubation <onboarding@resend.dev>", // ✅ TEST MODE FROM ADDRESS
       to: [email],
       subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
+      subject: "📧 Your Application Submitted Successfully - Dreamers Incubation",
       html: emailHtml,
     });
 
     if (emailError) {
       console.error("DIRECT EMAIL: Resend error:", emailError);
+      console.error("DIRECT EMAIL: Resend error:", emailError);
       return new Response(
+        JSON.stringify({ error: "Failed to send confirmation email to registered address" }),
         JSON.stringify({ error: "Failed to send confirmation email to registered address" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     console.log("DIRECT EMAIL: Confirmation email sent successfully to registered user:", email, "Message ID:", emailData.id);
+    console.log("DIRECT EMAIL: Confirmation email sent successfully to registered user:", email, "Message ID:", emailData.id);
 
     return new Response(
+      JSON.stringify({ success: true, message: `Confirmation email sent to registered address: ${email}` }),
       JSON.stringify({ success: true, message: `Confirmation email sent to registered address: ${email}` }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err) {
+    console.error("DIRECT EMAIL: Error in send-submission-confirmation function:", err);
     console.error("DIRECT EMAIL: Error in send-submission-confirmation function:", err);
     return new Response(
       JSON.stringify({ error: err.message || "Unknown error" }),
