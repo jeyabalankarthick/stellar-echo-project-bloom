@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,7 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
       
       // Send confirmation email to the registered user
       const userEmail = data.email;
-      console.log(`SUBMISSION: Sending confirmation to registered user email: ${userEmail}`);
+      console.log(`SUBMISSION: Attempting to send confirmation email to: ${userEmail}`);
       
       try {
         const confirmationEmailPayload = {
@@ -140,43 +141,42 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
         
         console.log('Confirmation email payload:', confirmationEmailPayload);
         
-        const { data: emailResponse, error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
+        const response = await supabase.functions.invoke('send-submission-confirmation', {
           body: confirmationEmailPayload
         });
 
-        if (confirmationEmailError) {
-          console.error('Confirmation email error:', confirmationEmailError);
+        console.log('Email function response:', response);
+
+        if (response.error) {
+          console.error('Confirmation email error:', response.error);
           toast({
-            title: "Application Saved",
-            description: `Application submitted successfully! However, there was an issue sending the confirmation email to ${userEmail}. Please check your email settings.`,
-            variant: "destructive",
+            title: "Application Submitted",
+            description: `Your application has been submitted successfully! However, we couldn't send the confirmation email to ${userEmail}. Please contact support if needed.`,
           });
         } else {
           console.log('Confirmation email sent successfully to:', userEmail);
-          console.log('Email response:', emailResponse);
           toast({
-            title: "Success",
-            description: `Application submitted successfully! Confirmation email sent to ${userEmail}`,
+            title: "Success!",
+            description: `Application submitted successfully! A confirmation email has been sent to ${userEmail}`,
           });
         }
       } catch (emailError) {
-        console.error('Error sending confirmation email to user:', emailError);
+        console.error('Error sending confirmation email:', emailError);
         toast({
-          title: "Application Saved", 
-          description: `Application submitted successfully! However, there was an issue sending the confirmation email to ${userEmail}`,
-          variant: "destructive",
+          title: "Application Submitted", 
+          description: `Your application has been submitted successfully! However, we couldn't send the confirmation email to ${userEmail}. Please contact support if needed.`,
         });
       }
       
       // Send email notification to admin
       console.log('Sending admin notification email...');
       try {
-        const { error: adminEmailError } = await supabase.functions.invoke('send-approval-email', {
+        const adminResponse = await supabase.functions.invoke('send-approval-email', {
           body: { applicationId: insertedApplication.id }
         });
 
-        if (adminEmailError) {
-          console.error('Admin email sending error:', adminEmailError);
+        if (adminResponse.error) {
+          console.error('Admin email error:', adminResponse.error);
         } else {
           console.log('Admin notification email sent successfully');
         }
