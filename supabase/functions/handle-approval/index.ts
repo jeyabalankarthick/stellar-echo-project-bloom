@@ -240,7 +240,7 @@ serve(async (req: Request): Promise<Response> => {
     `;
 
     const { data: emailData, error: emailErr } = await resend.emails.send({
-      from: "Dreamers Incubation <onboarding@resend.dev>",
+      from: "Dreamers Incubation <noreply@resend.dev>",
       to: [registeredEmail],
       subject,
       html: emailHtml,

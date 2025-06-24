@@ -126,9 +126,9 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
 
       console.log('Application saved successfully:', insertedApplication);
       
-      // DIRECT EMAIL SENDING - Send confirmation email to the registered user
+      // Send confirmation email to the registered user
       const userEmail = data.email;
-      console.log(`DIRECT EMAIL: Sending confirmation to registered user email: ${userEmail}`);
+      console.log(`SUBMISSION: Sending confirmation to registered user email: ${userEmail}`);
       
       try {
         const confirmationEmailPayload = {
@@ -138,32 +138,32 @@ const StartupIdeaStep = ({ data, updateData, onPrev }: StartupIdeaStepProps) => 
           startupName: data.startupName
         };
         
-        console.log('DIRECT EMAIL: Confirmation email payload:', confirmationEmailPayload);
+        console.log('Confirmation email payload:', confirmationEmailPayload);
         
         const { data: emailResponse, error: confirmationEmailError } = await supabase.functions.invoke('send-submission-confirmation', {
           body: confirmationEmailPayload
         });
 
         if (confirmationEmailError) {
-          console.error('DIRECT EMAIL: Confirmation email error:', confirmationEmailError);
+          console.error('Confirmation email error:', confirmationEmailError);
           toast({
-            title: "Email Warning",
-            description: `Application saved but confirmation email failed to send to ${userEmail}`,
+            title: "Application Saved",
+            description: `Application submitted successfully! However, there was an issue sending the confirmation email to ${userEmail}. Please check your email settings.`,
             variant: "destructive",
           });
         } else {
-          console.log('DIRECT EMAIL: Confirmation email sent successfully to:', userEmail);
-          console.log('DIRECT EMAIL: Email response:', emailResponse);
+          console.log('Confirmation email sent successfully to:', userEmail);
+          console.log('Email response:', emailResponse);
           toast({
             title: "Success",
             description: `Application submitted successfully! Confirmation email sent to ${userEmail}`,
           });
         }
       } catch (emailError) {
-        console.error('DIRECT EMAIL: Error sending confirmation email to user:', emailError);
+        console.error('Error sending confirmation email to user:', emailError);
         toast({
-          title: "Email Warning", 
-          description: `Application saved but confirmation email failed to send to ${userEmail}`,
+          title: "Application Saved", 
+          description: `Application submitted successfully! However, there was an issue sending the confirmation email to ${userEmail}`,
           variant: "destructive",
         });
       }
